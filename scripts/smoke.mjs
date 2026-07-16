@@ -26,6 +26,10 @@ const CALLS = [
   ['check_indexability', { url: 'https://lilagents.com' }],
   ['validate_schema', { url: 'https://lilagents.com' }],
   ['domain_rating', { domain: 'github.com' }],
+  ['dmarc_check', { domain: 'google.com' }],
+  ['sitemap_check', { url: 'https://www.cloudflare.com' }],
+  ['og_preview', { url: 'https://stripe.com' }],
+  ['alt_audit', { url: 'https://lilagents.com' }],
 ];
 
 let pass = 0, fail = 0;

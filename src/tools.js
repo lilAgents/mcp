@@ -257,4 +257,122 @@ export const TOOLS = [
       }
     },
   },
+  {
+    name: 'dmarc_check',
+    title: 'Check DMARC and SPF',
+    description: 'Check a domain email authentication: the DMARC record and its policy (none, quarantine, reject) plus the SPF record. Useful for deliverability and spoofing protection.',
+    input: { domain: z.string().describe('The domain, e.g. example.com') },
+    async run({ domain }) {
+      const host = hostOf(domain);
+      if (!host) throw new Error('Enter a domain, e.g. example.com.');
+      const clean = (v) => String(v).replace(/^"|"$/g, '').replace(/"\s+"/g, '');
+      const [dmarcRecs, txtRecs] = await Promise.all([doh('_dmarc.' + host, 'TXT'), doh(host, 'TXT')]);
+      const dmarc = dmarcRecs.map((r) => clean(r.value)).find((v) => /v=DMARC1/i.test(v)) || null;
+      const spf = txtRecs.map((r) => clean(r.value)).find((v) => /v=spf1/i.test(v)) || null;
+      const policy = dmarc ? ((dmarc.match(/\bp=([a-z]+)/i) || [])[1] || null) : null;
+      const parts = [
+        dmarc ? `DMARC ${policy ? 'p=' + policy : 'present'}` : 'no DMARC',
+        spf ? 'SPF present' : 'no SPF',
+      ];
+      return {
+        domain: host,
+        dmarc: { found: !!dmarc, policy, record: dmarc },
+        spf: { found: !!spf, record: spf },
+        summary: `${host}: ${parts.join(', ')}.`,
+      };
+    },
+  },
+  {
+    name: 'sitemap_check',
+    title: 'Check the sitemap',
+    description: 'Find and read a site sitemap (sitemap.xml or the one declared in robots.txt), and report whether it is a sitemap index or a urlset, how many entries it has, and how many carry a lastmod.',
+    input: { url: z.string().describe('The site URL or domain, e.g. example.com') },
+    async run({ url }) {
+      const origin = normalizeUrl(url).origin;
+      let smUrl = origin + '/sitemap.xml';
+      let via = 'sitemap.xml';
+      let res = await safeFetch(smUrl, { accept: 'application/xml, text/xml, */*' });
+      if (res.status >= 400) {
+        try {
+          const rob = await safeFetch(origin + '/robots.txt', { accept: 'text/plain, */*' });
+          const txt = rob.status < 400 ? await readBody(rob.response) : '';
+          const m = txt.match(/^\s*sitemap:\s*(\S+)/im);
+          if (m) { smUrl = m[1]; via = 'robots.txt'; res = await safeFetch(smUrl, { accept: 'application/xml, text/xml, */*' }); }
+        } catch { /* none */ }
+      }
+      if (res.status >= 400) return { url: origin, found: false, summary: `No sitemap found for ${origin}.` };
+      const xml = await readBody(res.response);
+      const isIndex = /<sitemapindex[\s>]/i.test(xml);
+      const entries = (xml.match(/<loc[\s>]/gi) || []).length;
+      const withLastmod = (xml.match(/<lastmod[\s>]/gi) || []).length;
+      return {
+        url: origin,
+        found: true,
+        sitemap_url: smUrl,
+        discovered_via: via,
+        type: isIndex ? 'sitemapindex' : 'urlset',
+        entries,
+        with_lastmod: withLastmod,
+        summary: `${smUrl}: ${isIndex ? 'sitemap index' : 'urlset'} with ${entries} entries (${withLastmod} with lastmod).`,
+      };
+    },
+  },
+  {
+    name: 'og_preview',
+    title: 'Preview Open Graph tags',
+    description: 'Fetch a page and read its Open Graph and Twitter Card tags, the title and image a social or AI preview would show, and flag any missing.',
+    input: { url: z.string().describe('The page URL, e.g. https://example.com/') },
+    async run({ url }) {
+      const res = await safeFetch(url);
+      const html = await readBody(res.response);
+      const meta = (prop) => {
+        const re = new RegExp('<meta[^>]+(?:property|name)=["\\\']' + prop.replace(/[:]/g, '\\$&') + '["\\\'][^>]*>', 'i');
+        const tag = (html.match(re) || [])[0] || '';
+        return (tag.match(/content=["']([^"']*)["']/i) || [])[1] || null;
+      };
+      const og = { title: meta('og:title'), description: meta('og:description'), image: meta('og:image'), type: meta('og:type'), site_name: meta('og:site_name'), url: meta('og:url') };
+      const twitter = { card: meta('twitter:card'), title: meta('twitter:title'), image: meta('twitter:image') };
+      const titleTag = (html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || null;
+      const missing = ['og:title', 'og:description', 'og:image'].filter((k) => !og[k.split(':')[1]]);
+      return {
+        url: res.finalUrl,
+        title_tag: titleTag,
+        open_graph: og,
+        twitter,
+        missing,
+        summary: missing.length ? `${res.finalUrl} is missing ${missing.join(', ')}.` : `${res.finalUrl} has a complete Open Graph card${og.title ? `: "${og.title}"` : ''}.`,
+      };
+    },
+  },
+  {
+    name: 'alt_audit',
+    title: 'Audit image alt text',
+    description: 'Fetch a page and audit its images for alt text: how many have descriptive alt, how many are empty, and how many are missing it entirely, with a few example sources.',
+    input: { url: z.string().describe('The page URL, e.g. https://example.com/') },
+    async run({ url }) {
+      const res = await safeFetch(url);
+      const html = await readBody(res.response);
+      const imgs = html.match(/<img\b[^>]*>/gi) || [];
+      let withAlt = 0, emptyAlt = 0, missingAlt = 0;
+      const missingExamples = [];
+      for (const tag of imgs) {
+        const altM = tag.match(/\balt=["']([^"']*)["']/i);
+        if (!altM) {
+          missingAlt++;
+          const src = (tag.match(/\bsrc=["']([^"']+)["']/i) || [])[1];
+          if (src && missingExamples.length < 8) missingExamples.push(src);
+        } else if (altM[1].trim() === '') emptyAlt++;
+        else withAlt++;
+      }
+      return {
+        url: res.finalUrl,
+        images: imgs.length,
+        with_alt: withAlt,
+        empty_alt: emptyAlt,
+        missing_alt: missingAlt,
+        missing_examples: missingExamples,
+        summary: `${res.finalUrl}: ${imgs.length} images, ${withAlt} with alt, ${emptyAlt} empty, ${missingAlt} missing.`,
+      };
+    },
+  },
 ];

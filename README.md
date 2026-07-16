@@ -18,6 +18,10 @@ A free tool by [lilAgents](https://lilagents.com).
 | `check_indexability` | Reads canonical, meta robots, and X-Robots-Tag to say if a page is indexable. |
 | `validate_schema` | Extracts and validates every JSON-LD block and lists the schema.org types. |
 | `domain_rating` | The Ahrefs Domain Rating (0 to 100), with the required attribution. |
+| `dmarc_check` | The DMARC record and policy plus the SPF record for a domain. |
+| `sitemap_check` | Finds the sitemap and reports its type, entry count, and lastmod coverage. |
+| `og_preview` | Reads Open Graph and Twitter Card tags, the title and image a preview would show. |
+| `alt_audit` | Audits a page's images for descriptive, empty, and missing alt text. |
 
 ## Install
 
