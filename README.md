@@ -21,7 +21,25 @@ A free tool by [lilAgents](https://lilagents.com).
 
 ## Install
 
+### Remote, no install (Claude.ai, ChatGPT, and any Streamable HTTP client)
+
+Add this URL as a custom connector or remote MCP server:
+
+```
+https://mcp.lilagents.com
+```
+
+No install and no key. This is the hosted server; it runs the same tools as the package below.
+
 ### Claude Code
+
+Remote:
+
+```
+claude mcp add --transport http lilagents https://mcp.lilagents.com
+```
+
+Or local over stdio:
 
 ```
 claude mcp add lilagents -- npx -y @lilagents/mcp

@@ -1,0 +1,17 @@
+# Remote lilAgents MCP server, deployed to mcp.lilagents.com.
+# Run from this directory: `npx wrangler deploy`.
+name = "lilagents-mcp"
+main = "index.js"
+account_id = "632ef4626f5402b2df723e553be1e53e"
+compatibility_date = "2026-07-16"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# lilagents.com is a Cloudflare zone on this account, so wrangler provisions the
+# custom domain (DNS record + edge cert) automatically on deploy.
+[[routes]]
+pattern = "mcp.lilagents.com"
+custom_domain = true
+
+[observability]
+enabled = true
