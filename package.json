@@ -1,0 +1,46 @@
+{
+  "name": "@lilagents/mcp",
+  "version": "1.0.0",
+  "description": "The lilAgents free-tool fleet as an MCP server: detect a site tech stack, trace redirects, snapshot DNS, audit security headers, check AI-crawler access, indexability, JSON-LD, and Ahrefs Domain Rating. Built for AI agents.",
+  "type": "module",
+  "bin": {
+    "lilagents-mcp": "src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "smoke": "node scripts/smoke.mjs",
+    "inspect": "npx -y @modelcontextprotocol/inspector node src/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "lilagents",
+    "seo",
+    "geo",
+    "aeo",
+    "ai-visibility",
+    "agent-tools"
+  ],
+  "license": "MIT",
+  "author": "lilAgents (https://lilagents.com)",
+  "homepage": "https://lilagents.com/mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lilAgents/mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lilAgents/mcp/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
+  }
+}
