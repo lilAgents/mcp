@@ -39,6 +39,9 @@
   "bugs": {
     "url": "https://github.com/lilAgents/mcp/issues"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.23.8"
