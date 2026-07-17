@@ -85,6 +85,12 @@ export async function readBody(response) {
 
 // DNS-over-HTTPS (Cloudflare) so DNS lookups need no local resolver.
 const RR = { 1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 15: 'MX', 16: 'TXT', 28: 'AAAA', 257: 'CAA' };
+const RCODE = { 0: 'NOERROR', 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 5: 'REFUSED' };
+// Returns { ok, records, status }. `ok` is true only when the query itself
+// completed (a valid DNS-JSON response came back), so callers can tell a genuine
+// empty answer (ok:true, records:[]) apart from a lookup that never ran
+// (ok:false: timeout, non-200, or unreachable resolver). `status` carries the
+// DNS rcode name (NOERROR, NXDOMAIN, ...) on success, or the failure reason.
 export async function doh(name, type) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 7000);
@@ -93,11 +99,12 @@ export async function doh(name, type) {
       `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`,
       { headers: { accept: 'application/dns-json' }, signal: ac.signal }
     );
-    if (!r.ok) return [];
+    if (!r.ok) return { ok: false, records: [], status: `HTTP ${r.status}` };
     const d = await r.json();
-    return (d.Answer || []).map((a) => ({ type: RR[a.type] || String(a.type), value: a.data, ttl: a.TTL }));
-  } catch {
-    return [];
+    const records = (d.Answer || []).map((a) => ({ type: RR[a.type] || String(a.type), value: a.data, ttl: a.TTL }));
+    return { ok: true, records, status: RCODE[d.Status] || 'NOERROR' };
+  } catch (e) {
+    return { ok: false, records: [], status: e && e.name === 'AbortError' ? 'timeout' : 'query_failed' };
   } finally {
     clearTimeout(t);
   }

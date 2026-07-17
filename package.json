@@ -1,6 +1,6 @@
 {
   "name": "@lilagents/mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "The lilAgents free-tool fleet as an MCP server: detect a site tech stack, trace redirects, snapshot DNS, audit security headers, check AI-crawler access, indexability, JSON-LD, and Ahrefs Domain Rating. Built for AI agents.",
   "type": "module",
   "bin": {

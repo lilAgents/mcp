@@ -8,7 +8,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { TOOLS } from './tools.js';
 
 const server = new McpServer(
-  { name: 'lilagents', version: '1.1.0' },
+  { name: 'lilagents', version: '1.2.0' },
   {
     instructions:
       'lilAgents tools for auditing a website the way an AI agent sees it: detect its tech stack, trace redirects, snapshot DNS, audit security headers, check which AI crawlers robots.txt allows, check indexability, validate JSON-LD, and read the Ahrefs Domain Rating. Every tool takes a URL or domain and is a read-only public lookup.',

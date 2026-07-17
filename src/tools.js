@@ -125,13 +125,28 @@ export const TOOLS = [
       if (!host) throw new Error('Enter a domain, e.g. example.com.');
       const types = ['A', 'AAAA', 'MX', 'TXT', 'NS', 'CNAME', 'SOA', 'CAA'];
       const records = {};
-      await Promise.all(types.map(async (t) => { records[t] = await doh(host, t); }));
+      const unresolved = [];
+      let nxdomain = false;
+      await Promise.all(types.map(async (t) => {
+        const res = await doh(host, t);
+        records[t] = res.records;
+        if (!res.ok) unresolved.push(t);
+        if (res.status === 'NXDOMAIN') nxdomain = true;
+      }));
       const present = types.filter((t) => records[t].length);
-      return {
-        domain: host,
-        records,
-        summary: `${host}: ${present.map((t) => `${records[t].length} ${t}`).join(', ') || 'no records resolved'}.`,
-      };
+      // resolved:false means the lookups failed, which is NOT the same as the
+      // domain genuinely having no records. Say which, so the agent never reads
+      // a resolver hiccup as an empty result.
+      const resolved = unresolved.length === 0;
+      let summary;
+      if (!resolved) {
+        summary = `${host}: DNS lookup failed for ${unresolved.join(', ')} (could not resolve, not necessarily empty).`;
+      } else if (nxdomain && !present.length) {
+        summary = `${host}: domain does not exist (NXDOMAIN).`;
+      } else {
+        summary = `${host}: ${present.map((t) => `${records[t].length} ${t}`).join(', ') || 'resolved with no records'}.`;
+      }
+      return { domain: host, resolved, unresolved, records, summary };
     },
   },
   {
@@ -164,15 +179,17 @@ export const TOOLS = [
       const txt = found ? await readBody(res.response) : '';
       const groups = parseRobots(txt);
       const crawlers = AI_BOTS.map((b) => ({ name: b.name, operator: b.operator, allowed: isAllowed(groups, b.ua.toLowerCase()) }));
+      // true = present, false = checked and absent, null = could not check.
       let llms = false;
-      try { const l = await safeFetch(origin + '/llms.txt', { accept: 'text/plain, */*' }); llms = l.status < 400; } catch { /* absent */ }
+      try { const l = await safeFetch(origin + '/llms.txt', { accept: 'text/plain, */*' }); llms = l.status < 400; } catch { llms = null; }
       const blocked = crawlers.filter((c) => !c.allowed).map((c) => c.name);
+      const llmsLabel = llms === null ? 'unknown' : llms ? 'present' : 'absent';
       return {
         url: origin,
         robots_txt_found: found,
         ai_crawlers: crawlers,
         llms_txt: llms,
-        summary: `${origin}: ${blocked.length ? 'blocks ' + blocked.join(', ') : 'allows all major AI crawlers'}; llms.txt ${llms ? 'present' : 'absent'}.`,
+        summary: `${origin}: ${blocked.length ? 'blocks ' + blocked.join(', ') : 'allows all major AI crawlers'}; llms.txt ${llmsLabel}.`,
       };
     },
   },
@@ -266,9 +283,18 @@ export const TOOLS = [
       const host = hostOf(domain);
       if (!host) throw new Error('Enter a domain, e.g. example.com.');
       const clean = (v) => String(v).replace(/^"|"$/g, '').replace(/"\s+"/g, '');
-      const [dmarcRecs, txtRecs] = await Promise.all([doh('_dmarc.' + host, 'TXT'), doh(host, 'TXT')]);
-      const dmarc = dmarcRecs.map((r) => clean(r.value)).find((v) => /v=DMARC1/i.test(v)) || null;
-      const spf = txtRecs.map((r) => clean(r.value)).find((v) => /v=spf1/i.test(v)) || null;
+      const [dmarcRes, txtRes] = await Promise.all([doh('_dmarc.' + host, 'TXT'), doh(host, 'TXT')]);
+      // If either TXT lookup did not actually run, report "could not determine"
+      // rather than "no DMARC / no SPF", which would be a false negative.
+      if (!dmarcRes.ok || !txtRes.ok) {
+        return {
+          domain: host,
+          resolved: false,
+          summary: `${host}: DNS lookup failed, could not determine DMARC or SPF (not necessarily absent).`,
+        };
+      }
+      const dmarc = dmarcRes.records.map((r) => clean(r.value)).find((v) => /v=DMARC1/i.test(v)) || null;
+      const spf = txtRes.records.map((r) => clean(r.value)).find((v) => /v=spf1/i.test(v)) || null;
       const policy = dmarc ? ((dmarc.match(/\bp=([a-z]+)/i) || [])[1] || null) : null;
       const parts = [
         dmarc ? `DMARC ${policy ? 'p=' + policy : 'present'}` : 'no DMARC',
@@ -276,6 +302,7 @@ export const TOOLS = [
       ];
       return {
         domain: host,
+        resolved: true,
         dmarc: { found: !!dmarc, policy, record: dmarc },
         spf: { found: !!spf, record: spf },
         summary: `${host}: ${parts.join(', ')}.`,
